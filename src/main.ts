@@ -1,5 +1,15 @@
-import { BasesView, ButtonComponent, Menu, Modal, Notice, NullValue, Plugin, PluginSettingTab, Setting, TFile, TFolder, getLinkpath, parseYaml, requestUrl, setIcon, stringifyYaml } from "obsidian";
+import { BasesView, ButtonComponent, Menu, Modal, Notice as ObsidianNotice, NullValue, Plugin, PluginSettingTab, Setting, TFile, TFolder, getLinkpath, parseYaml, requestUrl, setIcon, stringifyYaml } from "obsidian";
 import type { App, BasesAllOptions, BasesEntry, BasesPropertyId, BasesViewConfig, Editor, QueryController, SettingDefinitionItem, SettingDefinitionPage, SettingDefinitionRender, WorkspaceLeaf } from "obsidian";
+
+let pluginNoticesEnabled = () => true;
+
+class Notice extends ObsidianNotice {
+	constructor(message: string | DocumentFragment, duration?: number) {
+		super(message, duration);
+		if (!pluginNoticesEnabled()) this.hide();
+	}
+}
+
 import {
 	AggOp,
 	CellKind,
@@ -446,6 +456,7 @@ interface PowerBasesSettings {
 	/** Stamp edited/edited-by on rows Power views change, and created/created-by
 	 *  on pages they create. Off by default; needs myName to do anything. */
 	stampEdits: boolean;
+	showNotifications: boolean;
 }
 
 const DEFAULT_SETTINGS: PowerBasesSettings = {
@@ -459,6 +470,7 @@ const DEFAULT_SETTINGS: PowerBasesSettings = {
 	basesFolder: "",
 	myName: "",
 	stampEdits: false,
+	showNotifications: true,
 };
 
 /** Settings tab: manage the hand-picked value colors (the only persisted
@@ -767,6 +779,16 @@ class PowerBasesSettingTab extends PluginSettingTab {
 		// through persistSettings, never saveData: a whole-object write reverts
 		// whatever another device changed since this one loaded
 		const save = () => void this.plugin.persistSettings();
+		const notifications: Row[] = [
+			{
+				name: "Show notifications",
+				desc: "Show popup notices from Power Bases. Turn off to keep Obsidian clear, especially on phones.",
+				help: "When off, Power Bases suppresses every popup notice, including progress, success, warning, and error notices.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.showNotifications).onChange((v) => ((s.showNotifications = v), save())));
+				},
+			},
+		];
 
 		const newBases: Row[] = [
 			{
@@ -895,6 +917,7 @@ class PowerBasesSettingTab extends PluginSettingTab {
 				id: "general",
 				label: "General",
 				groups: [
+					{ heading: "Notifications", rows: notifications },
 					{ heading: "New bases", rows: newBases },
 					{ heading: "Identity", rows: identity },
 				],
@@ -1201,6 +1224,7 @@ export default class PowerBasesPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		pluginNoticesEnabled = () => this.settings.showNotifications;
 		// hover previews on cards, chips, and name cells (Page preview plugin)
 		const ws = this.app.workspace as unknown as {
 			registerHoverLinkSource?: (id: string, info: { display: string; defaultMod: boolean }) => void;
