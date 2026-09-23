@@ -416,15 +416,16 @@ const PALETTE = NAMED_PALETTE.map(([, hex]) => hex);
  *  https://docs.super.so/notion-colors */
 interface NotionChipColor { name: string; lightBg: string; lightFg: string; darkBg: string; darkFg: string }
 const NOTION_CHIPS: NotionChipColor[] = [
-	{ name: "Notion Gray", lightBg: "#EBECED", lightFg: "#9B9A97", darkBg: "#454B4E", darkFg: "#979A9B" },
-	{ name: "Notion Brown", lightBg: "#E9E5E3", lightFg: "#64473A", darkBg: "#434040", darkFg: "#937264" },
-	{ name: "Notion Orange", lightBg: "#FAEBDD", lightFg: "#D9730D", darkBg: "#594A3A", darkFg: "#FFA344" },
-	{ name: "Notion Yellow", lightBg: "#FBF3DB", lightFg: "#DFAB01", darkBg: "#59563B", darkFg: "#FFDC49" },
-	{ name: "Notion Green", lightBg: "#DDEDEA", lightFg: "#0F7B6C", darkBg: "#354C4B", darkFg: "#4DAB9A" },
-	{ name: "Notion Blue", lightBg: "#DDEBF1", lightFg: "#0B6E99", darkBg: "#364954", darkFg: "#529CCA" },
-	{ name: "Notion Purple", lightBg: "#EAE4F2", lightFg: "#6940A5", darkBg: "#443F57", darkFg: "#9A6DD7" },
-	{ name: "Notion Pink", lightBg: "#F4DFEB", lightFg: "#AD1A72", darkBg: "#533B4C", darkFg: "#E255A1" },
-	{ name: "Notion Red", lightBg: "#FBE4E4", lightFg: "#E03E3E", darkBg: "#594141", darkFg: "#FF7369" },
+	// current Notion select palette (2023+ redesign): muted dark text on a pastel field
+	{ name: "Notion Gray", lightBg: "#E3E2E0", lightFg: "#32302C", darkBg: "#5A5A5A", darkFg: "#D4D4D4" },
+	{ name: "Notion Brown", lightBg: "#EEE0DA", lightFg: "#442A1E", darkBg: "#603B2C", darkFg: "#D4D4D4" },
+	{ name: "Notion Orange", lightBg: "#FADEC9", lightFg: "#49290E", darkBg: "#854C1D", darkFg: "#D4D4D4" },
+	{ name: "Notion Yellow", lightBg: "#FDECC8", lightFg: "#402C1B", darkBg: "#89632A", darkFg: "#D4D4D4" },
+	{ name: "Notion Green", lightBg: "#DBEDDB", lightFg: "#1C3829", darkBg: "#2B593F", darkFg: "#D4D4D4" },
+	{ name: "Notion Blue", lightBg: "#D3E5EF", lightFg: "#183347", darkBg: "#28456C", darkFg: "#D4D4D4" },
+	{ name: "Notion Purple", lightBg: "#E8DEEE", lightFg: "#412454", darkBg: "#492F64", darkFg: "#D4D4D4" },
+	{ name: "Notion Pink", lightBg: "#F5E0E9", lightFg: "#4C2337", darkBg: "#69314C", darkFg: "#D4D4D4" },
+	{ name: "Notion Red", lightBg: "#FFE2DD", lightFg: "#5D1715", darkBg: "#6E3630", darkFg: "#D4D4D4" },
 ];
 const NOTION_CHIP_BY_FG = new Map(NOTION_CHIPS.map((c) => [c.lightFg.toLowerCase(), c]));
 /** Palette rows offered in the color menus: the built-in hues plus Notion's. */
