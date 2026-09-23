@@ -411,6 +411,25 @@ const NAMED_PALETTE: [string, string][] = [
 ];
 const PALETTE = NAMED_PALETTE.map(([, hex]) => hex);
 
+/** Notion's select palette (light/dark background + text pairs), used by chip
+ *  mode when a value is pinned to one of these text colors. Source:
+ *  https://docs.super.so/notion-colors */
+interface NotionChipColor { name: string; lightBg: string; lightFg: string; darkBg: string; darkFg: string }
+const NOTION_CHIPS: NotionChipColor[] = [
+	{ name: "Notion Gray", lightBg: "#EBECED", lightFg: "#9B9A97", darkBg: "#454B4E", darkFg: "#979A9B" },
+	{ name: "Notion Brown", lightBg: "#E9E5E3", lightFg: "#64473A", darkBg: "#434040", darkFg: "#937264" },
+	{ name: "Notion Orange", lightBg: "#FAEBDD", lightFg: "#D9730D", darkBg: "#594A3A", darkFg: "#FFA344" },
+	{ name: "Notion Yellow", lightBg: "#FBF3DB", lightFg: "#DFAB01", darkBg: "#59563B", darkFg: "#FFDC49" },
+	{ name: "Notion Green", lightBg: "#DDEDEA", lightFg: "#0F7B6C", darkBg: "#354C4B", darkFg: "#4DAB9A" },
+	{ name: "Notion Blue", lightBg: "#DDEBF1", lightFg: "#0B6E99", darkBg: "#364954", darkFg: "#529CCA" },
+	{ name: "Notion Purple", lightBg: "#EAE4F2", lightFg: "#6940A5", darkBg: "#443F57", darkFg: "#9A6DD7" },
+	{ name: "Notion Pink", lightBg: "#F4DFEB", lightFg: "#AD1A72", darkBg: "#533B4C", darkFg: "#E255A1" },
+	{ name: "Notion Red", lightBg: "#FBE4E4", lightFg: "#E03E3E", darkBg: "#594141", darkFg: "#FF7369" },
+];
+const NOTION_CHIP_BY_FG = new Map(NOTION_CHIPS.map((c) => [c.lightFg.toLowerCase(), c]));
+/** Palette rows offered in the color menus: the built-in hues plus Notion's. */
+const MENU_PALETTE: [string, string][] = [...NAMED_PALETTE, ...NOTION_CHIPS.map((c): [string, string] => [c.name, c.lightFg])];
+
 /** note.status -> status: the frontmatter key a note property writes to. */
 const frontmatterKey = (prop: BasesPropertyId) => prop.split(".").slice(1).join(".");
 
@@ -931,7 +950,7 @@ class PowerBasesSettingTab extends PluginSettingTab {
 /** The 16 hues plus Automatic, for a lane header or a colored cell value. */
 function fillValueColorMenu(menu: Menu, plugin: PowerBasesPlugin, fmKey: string, value: string, onDone: () => void) {
 	const current = plugin.settings.valueColors[fmKey]?.[value] ?? null;
-	for (const [name, hex] of NAMED_PALETTE) {
+	for (const [name, hex] of MENU_PALETTE) {
 		menu.addItem((item) => {
 			const title = createFragment((frag) => {
 				const dot = frag.createSpan();
@@ -3613,7 +3632,7 @@ class NumberFormatModal extends Modal {
 			swatchEls.push({ hex, el: b });
 		};
 		addSwatch("", "Default");
-		for (const [name, hex] of NAMED_PALETTE) addSwatch(hex, name);
+		for (const [name, hex] of MENU_PALETTE) addSwatch(hex, name);
 		paintSwatches();
 
 		// Show number (any visual)
@@ -4774,7 +4793,15 @@ class PowerTableView extends PBView {
 							const label = td.textContent ?? "";
 							td.empty();
 							td.addClass("pb-chipcell");
-							td.createSpan({ cls: "pb-person pb-valchip", text: label });
+							const chip = td.createSpan({ cls: "pb-person pb-valchip", text: label });
+							const notion = NOTION_CHIP_BY_FG.get(this.plugin.hueFor(fmKey, s).toLowerCase());
+							if (notion) {
+								chip.addClass("pb-valchip-notion");
+								chip.style.setProperty("--pb-chip-bg-light", notion.lightBg);
+								chip.style.setProperty("--pb-chip-fg-light", notion.lightFg);
+								chip.style.setProperty("--pb-chip-bg-dark", notion.darkBg);
+								chip.style.setProperty("--pb-chip-fg-dark", notion.darkFg);
+							}
 						} else {
 							td.addClass("pb-cat");
 						}

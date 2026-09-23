@@ -1146,14 +1146,27 @@ button.pb-cal-btn svg {
 }
 .pb-td .pb-valchip {
 	margin: 0;
-	padding: 2px 8px;
+	height: 20px;
+	padding: 0 7px;
+	border-radius: 3px;
+	font-size: 13px;
 	font-weight: 500;
+	line-height: 120%;
 	white-space: nowrap;
 	color: var(--pb-c);
 	background: color-mix(in srgb, var(--pb-c) 18%, transparent);
 }
 .theme-dark .pb-td .pb-valchip {
 	background: color-mix(in srgb, var(--pb-c) 26%, transparent);
+}
+/* pinned to a Notion color: use Notion's exact background/text pair per theme */
+.pb-td .pb-valchip.pb-valchip-notion {
+	color: var(--pb-chip-fg-light);
+	background: var(--pb-chip-bg-light);
+}
+.theme-dark .pb-td .pb-valchip.pb-valchip-notion {
+	color: var(--pb-chip-fg-dark);
+	background: var(--pb-chip-bg-dark);
 }
 
 /* numeric scale tint: stronger accent as the value climbs the range */
