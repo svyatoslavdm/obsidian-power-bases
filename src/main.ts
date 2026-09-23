@@ -1391,7 +1391,7 @@ export default class PowerBasesPlugin extends Plugin {
 						{
 							type: "group" as const,
 							displayName: "Column colors",
-							items: per("color:", { none: "None", value: "By value", scale: "Number scale" }),
+							items: per("color:", { none: "None", value: "By value (tint)", chip: "By value (chip)", scale: "Number scale" }),
 						},
 						rollupSlot(1),
 						rollupSlot(2),
@@ -4766,8 +4766,18 @@ class PowerTableView extends PBView {
 						this.registerEdit(td, () => this.beginEdit(td, en, fmKey!, kind, raw));
 					}
 					const mode = colorOf(p);
-					if (mode === "value" && s && kind !== "checkbox") {
-						td.addClass("pb-cat");
+					if ((mode === "value" || mode === "chip") && s && kind !== "checkbox") {
+						if (mode === "chip" && td.childElementCount === 0) {
+							// chip mode: the value becomes a Notion-style pill instead of
+							// tinting the whole cell (plain-text cells only; meters, list
+							// chips and typed cells keep their own rendering)
+							const label = td.textContent ?? "";
+							td.empty();
+							td.addClass("pb-chipcell");
+							td.createSpan({ cls: "pb-person pb-valchip", text: label });
+						} else {
+							td.addClass("pb-cat");
+						}
 						td.style.setProperty("--pb-c", this.plugin.hueFor(fmKey, s));
 						td.addEventListener("contextmenu", (ev) => {
 							if (!fmKey) return;
@@ -7212,7 +7222,7 @@ class PowerTableView extends PBView {
 		// suggest existing values only for Select/Status columns (color mode
 		// "value"), where repeating values is the point; plain Text stays a
 		// clean input, and a field type (Email, URL, Phone) is unique anyway
-		if (kind === "text" && !this.plugin.fieldType(fmKey) && this.config.get("color:note." + fmKey) === "value") {
+		if (kind === "text" && !this.plugin.fieldType(fmKey) && ["value", "chip"].includes(String(this.config.get("color:note." + fmKey))) ) {
 			// offer the column's existing values, Notion-select style (read from
 			// frontmatter and skip "null" so an absent value never becomes an option)
 			const seen = new Set<string>();
