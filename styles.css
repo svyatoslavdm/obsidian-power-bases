@@ -1146,6 +1146,8 @@ button.pb-cal-btn svg {
 }
 .pb-td .pb-valchip {
 	margin: 0;
+	box-shadow: none;
+	border: none;
 	height: 20px;
 	padding: 0 7px;
 	border-radius: 3px;
