@@ -4795,7 +4795,12 @@ class PowerTableView extends PBView {
 							td.empty();
 							td.addClass("pb-chipcell");
 							const chip = td.createSpan({ cls: "pb-person pb-valchip", text: label });
-							const notion = NOTION_CHIP_BY_FG.get(this.plugin.hueFor(fmKey, s).toLowerCase());
+							// pinned to a Notion text color → that pair; unpinned → a stable
+							// Notion pair by hash, so new values look like Notion's defaults
+							const pinned = fmKey ? this.plugin.settings.valueColors[fmKey]?.[s] : undefined;
+							const notion = pinned
+								? NOTION_CHIP_BY_FG.get(pinned.toLowerCase())
+								: NOTION_CHIPS[colorIndex(s, NOTION_CHIPS.length)];
 							if (notion) {
 								chip.addClass("pb-valchip-notion");
 								chip.style.setProperty("--pb-chip-bg-light", notion.lightBg);
