@@ -4667,10 +4667,9 @@ class PowerTableView extends PBView {
 		for (const p of cols) {
 			const th = hr.createEl("th", { cls: "pb-th pb-th-menu" });
 			const wrap = th.createDiv({ cls: "pb-th-typed" });
-			if (p.startsWith("formula.")) setIcon(wrap.createSpan({ cls: "pb-th-fx" }), "sigma");
+			// Notion-style header: a muted icon naming the column's kind, then the label
+			setIcon(wrap.createSpan({ cls: "pb-th-fx" }), this.headerIcon(p));
 			wrap.createSpan({ cls: "pb-th-label", text: this.config.getDisplayName(p) });
-			const ft = p.startsWith("note.") ? this.plugin.fieldType(frontmatterKey(p)) : null;
-			if (ft) wrap.createSpan({ cls: "pb-th-type", text: PB_TYPE_LABEL[ft] });
 			if (sortCfg && sortCfg.prop === String(p)) setIcon(wrap.createSpan({ cls: "pb-th-mark" }), sortCfg.dir === "DESC" ? "arrow-down" : "arrow-up");
 			if (this.columnFilter(String(p))) setIcon(wrap.createSpan({ cls: "pb-th-mark" }), "filter");
 			th.setAttribute("aria-label", "Click for column options");
@@ -5102,6 +5101,28 @@ class PowerTableView extends PBView {
 
 	/** Whether a column reads mostly as numbers or dates, by sampling its cells;
 	 *  drives which "… format" menu item shows and the bulk-apply picker. */
+	/** Icon for a column header, by field type, then by cell kind (Notion-style). */
+	private headerIcon(p: BasesPropertyId): string {
+		const id = String(p);
+		if (id.startsWith("formula.")) return "sigma";
+		if (id === "file.name") return "type";
+		if (id === "file.mtime" || id === "file.ctime") return "calendar";
+		if (id.startsWith("file.")) return "file";
+		const fmKey = frontmatterKey(p);
+		const ft = this.plugin.fieldType(fmKey);
+		if (ft) return PB_TYPE_ICON[ft];
+		const mode = String(this.config.get("color:note." + fmKey));
+		if (mode === "value" || mode === "chip") return "circle-chevron-down";
+		const kind = this.plugin.storedKind(fmKey) ?? this.plugin.assignedKind(fmKey) ?? "text";
+		switch (kind) {
+			case "number": return "hash";
+			case "date": case "datetime": return "calendar";
+			case "checkbox": return "square-check";
+			case "list": return "list";
+			default: return "type";
+		}
+	}
+
 	private columnKind(p: BasesPropertyId): "number" | "date" | "other" {
 		if (p === "file.mtime" || p === "file.ctime") return "date";
 		// file names sample as numbers in vaults full of numeric titles

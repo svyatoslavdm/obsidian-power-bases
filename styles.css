@@ -3067,3 +3067,21 @@ body.theme-light .notice:not(.pw-self-styled) a {
 	display: inline-flex;
 	align-items: center;
 }
+
+/* Notion-style column headers: regular weight, muted, kind icon before the
+   label. Element selectors beat Obsidian's `.markdown-rendered th` (which
+   otherwise restyles headers of tables embedded in a note). */
+.pb-table th.pb-th {
+	font-weight: 400;
+	font-size: var(--font-text-size, 14px);
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 6px 8px;
+}
+.pb-table th.pb-th .pb-th-fx {
+	opacity: 0.55;
+}
+.pb-table th.pb-th .pb-th-fx svg {
+	width: 14px;
+	height: 14px;
+}
