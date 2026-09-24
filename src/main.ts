@@ -451,6 +451,16 @@ interface PBFieldConfig {
 	buttonLink?: string;
 	/** verification: frontmatter key holding an expiry date. */
 	verifyExpiryProp?: string;
+	/** files: only offer notes under this folder (path prefix). */
+	folder?: string;
+	/** files: only offer notes whose frontmatter matches every key (value or one of the listed values). */
+	where?: Record<string, string | string[]>;
+	/** files: extra note paths always offered (e.g. an orphan-tasks hub outside `where`). */
+	include?: string[];
+	/** files: one link, not a list. */
+	single?: boolean;
+	/** files: write `[[file|Alias]]` and list notes by their alias / name without a numeric prefix. */
+	alias?: boolean;
 }
 
 interface PowerBasesSettings {
@@ -6494,7 +6504,7 @@ class PowerTableView extends PBView {
 						}
 					});
 				}
-				this.registerEdit(td, () => this.beginFilePick(td, en, fmKey, raw, { images: false, multi: true }));
+				this.registerEdit(td, () => this.beginFilePick(td, en, fmKey, raw, { images: false, multi: !this.plugin.fieldConfig(fmKey)?.single }));
 				break;
 			}
 		}
@@ -7014,11 +7024,38 @@ class PowerTableView extends PBView {
 		});
 		const list = pop.createDiv({ cls: "pb-fp-list" });
 
+		// a scoped field (folder / frontmatter match / explicit paths) offers a
+		// vocabulary of notes, alphabetically, instead of the whole vault by mtime
+		const fcfg = this.plugin.fieldConfig(fmKey);
+		const scoped = !opts.images && !!(fcfg?.folder || fcfg?.where || fcfg?.include);
+		const inScope = (f: TFile): boolean => {
+			if (fcfg?.include?.includes(f.path)) return true;
+			if (fcfg?.folder && !(f.path + "/").startsWith(fcfg.folder.replace(/\/$/, "") + "/")) return false;
+			if (fcfg?.where) {
+				const fm = frontmatterOf(this.app, f) ?? {};
+				for (const [k, want] of Object.entries(fcfg.where)) {
+					const have = fm[k] == null ? "" : String(fm[k]);
+					if (!(Array.isArray(want) ? want : [want]).includes(have)) return false;
+				}
+			}
+			return true;
+		};
+		const displayName = (f: TFile): string => {
+			if (!fcfg?.alias) return f.name;
+			const al = frontmatterOf(this.app, f)?.aliases;
+			const first = Array.isArray(al) ? al[0] : typeof al === "string" ? al : null;
+			return first ? String(first) : f.basename.replace(/^\d+_/, "");
+		};
 		const candidates = (): TFile[] => {
 			const q = search.value.trim().toLowerCase();
 			let files = this.app.vault
 				.getFiles()
 				.filter((f) => (opts.images ? IMG_EXTS.has(f.extension.toLowerCase()) : f.extension.toLowerCase() !== "base"));
+			if (scoped) {
+				files = files.filter(inScope);
+				if (q) files = files.filter((f) => displayName(f).toLowerCase().includes(q) || f.path.toLowerCase().includes(q));
+				return files.sort((a, b) => displayName(a).localeCompare(displayName(b))).slice(0, 60);
+			}
 			if (!q) return files.sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 12);
 			files = files.filter((f) => f.path.toLowerCase().includes(q));
 			const score = (f: TFile) => (f.basename.toLowerCase().startsWith(q) ? 0 : f.basename.toLowerCase().includes(q) ? 1 : 2);
@@ -7044,9 +7081,12 @@ class PowerTableView extends PBView {
 				if (opts.images) row.createEl("img", { cls: "pb-fp-thumb", attr: { src: this.app.vault.getResourcePath(f), alt: f.name } });
 				else setIcon(row.createSpan({ cls: "pb-pe-opt-ic" }), "file");
 				const txt = row.createDiv({ cls: "pb-fp-text" });
-				txt.createDiv({ cls: "pb-fp-name", text: f.name });
+				txt.createDiv({ cls: "pb-fp-name", text: scoped ? displayName(f) : f.name });
 				if (f.parent && f.parent.path !== "/") txt.createDiv({ cls: "pb-fp-path", text: f.parent.path });
-				row.addEventListener("click", () => pick("[[" + this.app.metadataCache.fileToLinktext(f, en.file.path) + "]]"));
+				row.addEventListener("click", () => {
+					const lt = this.app.metadataCache.fileToLinktext(f, en.file.path);
+					pick(fcfg?.alias ? `[[${lt}|${displayName(f)}]]` : `[[${lt}]]`);
+				});
 			}
 			const q = search.value.trim();
 			if (q) {
