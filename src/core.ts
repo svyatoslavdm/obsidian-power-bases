@@ -546,6 +546,29 @@ export function formatLinkValue(address: string, caption: string): string {
 	return c ? `[${c}](${a})` : a;
 }
 
+/** Frontmatter a new row must carry to pass the filters: every
+ *  `note.<key> == "<value>"` equality that is required unconditionally
+ *  (top level or inside `and:` groups; `or:`/`not:` groups and `||`
+ *  expressions are skipped). Without these a "+ New" note is filtered out
+ *  of the very view that created it. */
+export function impliedProps(filters: unknown, out: Record<string, string> = {}): Record<string, string> {
+	if (typeof filters === "string") {
+		if (filters.includes("||")) return out;
+		for (const m of filters.matchAll(/(?:^|&&)\s*!?\s*note\.([\w-]+)\s*==\s*"([^"]*)"/g)) out[m[1]] = m[2];
+		return out;
+	}
+	if (Array.isArray(filters)) {
+		for (const f of filters) impliedProps(f, out);
+		return out;
+	}
+	if (filters && typeof filters === "object") {
+		const o = filters as Record<string, unknown>;
+		if (o.and !== undefined) impliedProps(o.and, out);
+		return out;
+	}
+	return out;
+}
+
 /** The first file.inFolder("...") folder in a base's parsed filters, however
  *  nested (and/or groups); null when the base has no folder scope. */
 export function scopeFolder(filters: unknown): string | null {

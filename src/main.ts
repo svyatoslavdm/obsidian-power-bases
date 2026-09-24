@@ -62,6 +62,7 @@ import {
 	fileLinkParts,
 	parseDateInput,
 	scopeFolder,
+	impliedProps,
 	toCsv,
 	PhoneFormat,
 	PhoneStyle,
@@ -5920,7 +5921,25 @@ class PowerTableView extends PBView {
 		const prefix = folder.path === "/" ? "" : folder.path + "/";
 		let name = "Untitled";
 		for (let i = 1; this.app.vault.getAbstractFileByPath(prefix + name + ".md"); i++) name = `Untitled ${i}`;
-		const f = await this.app.vault.create(prefix + name + ".md", "");
+		// seed the properties the base's and this view's filters require, so
+		// the new note shows up in the view that created it
+		const seed: Record<string, string> = {};
+		const bf = this.baseFile();
+		if (bf) {
+			try {
+				const cfg = await readBaseConfig(this.app, bf);
+				impliedProps(cfg.filters, seed);
+				if (Array.isArray(cfg.views)) {
+					const v = (cfg.views as Record<string, unknown>[]).find((x) => x?.type === this.type && x?.name === this.viewName());
+					if (v) impliedProps(v.filters, seed);
+				}
+			} catch {
+				// unreadable base config: create a bare note
+			}
+		}
+		const yamlVal = (v: string) => (/^[\w.-]+$/.test(v) ? v : JSON.stringify(v));
+		const body = Object.keys(seed).length ? "---\n" + Object.entries(seed).map(([k, v]) => `${k}: ${yamlVal(v)}`).join("\n") + "\n---\n" : "";
+		const f = await this.app.vault.create(prefix + name + ".md", body);
 		if (this.plugin.settings.stampEdits && this.plugin.settings.myName.trim()) {
 			await this.app.fileManager.processFrontMatter(f, (fm: Record<string, unknown>) => this.plugin.stampCreate(fm));
 		}
