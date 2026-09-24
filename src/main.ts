@@ -1072,6 +1072,17 @@ export default class PowerBasesPlugin extends Plugin {
 		return PALETTE[colorIndex(value, PALETTE.length)];
 	}
 
+	/** Move a pinned value color to a new value name, keeping its position
+	 *  (the key order is the option order of Select pickers). */
+	async renameValueColor(fmKey: string, oldV: string, newV: string) {
+		const m = this.settings.valueColors[fmKey];
+		if (!m || !(oldV in m)) return;
+		const next: Record<string, string> = {};
+		for (const [k, v] of Object.entries(m)) next[k === oldV ? newV : k] = v;
+		this.settings.valueColors[fmKey] = next;
+		await this.persistSettings();
+	}
+
 	async setValueColor(fmKey: string, value: string, hex: string | null) {
 		const m = this.settings.valueColors;
 		if (hex) (m[fmKey] ??= {})[value] = hex;
@@ -7118,6 +7129,33 @@ class PowerTableView extends PBView {
 		return [...out, ...[...seen].sort((a, b) => a.localeCompare(b))];
 	}
 
+	/** Notes anywhere in the vault whose `fmKey` equals `v` (a Select value is
+	 *  a vocabulary shared beyond the current view's rows). */
+	private notesWithValue(fmKey: string, v: string): TFile[] {
+		const out: TFile[] = [];
+		for (const f of this.app.vault.getMarkdownFiles()) {
+			const raw = frontmatterOf(this.app, f)?.[fmKey];
+			if (raw != null && !Array.isArray(raw) && String(raw).trim() === v) out.push(f);
+		}
+		return out;
+	}
+
+	private async renameSelectValue(fmKey: string, oldV: string, rawNew: string) {
+		const newV = rawNew.trim();
+		if (!newV || newV === oldV) return;
+		const writes = this.notesWithValue(fmKey, oldV).map((file) => ({ file, assignments: { [fmKey]: newV } }));
+		if (writes.length) await this.plugin.writeBatch(`Renamed "${oldV}" to "${newV}"`, writes);
+		await this.plugin.renameValueColor(fmKey, oldV, newV);
+		this.plugin.refreshAll();
+	}
+
+	private async deleteSelectValue(fmKey: string, v: string) {
+		const writes = this.notesWithValue(fmKey, v).map((file) => ({ file, assignments: { [fmKey]: undefined } }));
+		if (writes.length) await this.plugin.writeBatch(`Removed "${v}"`, writes);
+		await this.plugin.setValueColor(fmKey, v, null);
+		this.plugin.refreshAll();
+	}
+
 	/** Single-select popover for Select/Status columns: one click sets the
 	 *  value, typing filters, Enter takes the first match (or creates it). */
 	private beginSelectEdit(td: HTMLElement, en: BasesEntry, fmKey: string, raw: unknown) {
@@ -7178,6 +7216,27 @@ class PowerTableView extends PBView {
 				this.paintChip(chip, fmKey, v);
 				if (v === current) setIcon(row.createSpan({ cls: "pb-le-oic pb-se-check" }), "check");
 				row.addEventListener("click", () => finish(v));
+				const acts = row.createSpan({ cls: "pb-le-acts" });
+				const edit = acts.createSpan({ cls: "pb-le-act", attr: { "aria-label": "Rename everywhere" } });
+				setIcon(edit, "pencil");
+				edit.addEventListener("click", (e) => {
+					e.stopPropagation();
+					finish();
+					new PromptModal(this.app, { title: `Rename "${v}"`, initial: v, onSubmit: (nv) => void this.renameSelectValue(fmKey, v, nv) }).open();
+				});
+				const del = acts.createSpan({ cls: "pb-le-act pb-le-del", attr: { "aria-label": "Delete everywhere" } });
+				setIcon(del, "trash-2");
+				del.addEventListener("click", (e) => {
+					e.stopPropagation();
+					finish();
+					const n = this.notesWithValue(fmKey, v).length;
+					new ConfirmModal(this.app, {
+						title: "Delete value",
+						body: `Clear "${v}" from ${fmKey} in ${n} note${n === 1 ? "" : "s"} across the vault and forget its color? You can undo the notes.`,
+						confirmText: "Delete",
+						onConfirm: () => void this.deleteSelectValue(fmKey, v),
+					}).open();
+				});
 			}
 		};
 		input.addEventListener("keydown", (e) => {

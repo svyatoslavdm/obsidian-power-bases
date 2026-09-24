@@ -3060,8 +3060,10 @@ body.theme-light .notice:not(.pw-self-styled) a {
 	background: var(--background-modifier-hover);
 }
 .pb-seledit .pb-se-check {
-	margin-left: auto;
 	color: var(--text-muted);
+}
+.pb-seledit .pb-le-acts {
+	margin-left: auto;
 }
 .pb-seledit .pb-valchip {
 	display: inline-flex;
