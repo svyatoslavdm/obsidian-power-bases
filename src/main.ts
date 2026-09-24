@@ -4795,19 +4795,7 @@ class PowerTableView extends PBView {
 							td.empty();
 							td.addClass("pb-chipcell");
 							const chip = td.createSpan({ cls: "pb-person pb-valchip", text: label });
-							// pinned to a Notion text color → that pair; unpinned → a stable
-							// Notion pair by hash, so new values look like Notion's defaults
-							const pinned = fmKey ? this.plugin.settings.valueColors[fmKey]?.[s] : undefined;
-							const notion = pinned
-								? NOTION_CHIP_BY_FG.get(pinned.toLowerCase())
-								: NOTION_CHIPS[colorIndex(s, NOTION_CHIPS.length)];
-							if (notion) {
-								chip.addClass("pb-valchip-notion");
-								chip.style.setProperty("--pb-chip-bg-light", notion.lightBg);
-								chip.style.setProperty("--pb-chip-fg-light", notion.lightFg);
-								chip.style.setProperty("--pb-chip-bg-dark", notion.darkBg);
-								chip.style.setProperty("--pb-chip-fg-dark", notion.darkFg);
-							}
+							if (fmKey) this.paintChip(chip, fmKey, s);
 						} else {
 							td.addClass("pb-cat");
 						}
@@ -7076,6 +7064,117 @@ class PowerTableView extends PBView {
 
 	/** The distinct values used anywhere in a list column (for the multi-select
 	 *  options), read from frontmatter so an absent value is never "null". */
+	/** Paint a span as a Notion-style chip for value `s` of column `fmKey`
+	 *  (pinned Notion text color → that pair; otherwise a stable pair by hash). */
+	private paintChip(chip: HTMLElement, fmKey: string, s: string) {
+		chip.style.setProperty("--pb-c", this.plugin.hueFor(fmKey, s));
+		const pinned = this.plugin.settings.valueColors[fmKey]?.[s];
+		const notion = pinned ? NOTION_CHIP_BY_FG.get(pinned.toLowerCase()) : NOTION_CHIPS[colorIndex(s, NOTION_CHIPS.length)];
+		if (notion) {
+			chip.addClass("pb-valchip-notion");
+			chip.style.setProperty("--pb-chip-bg-light", notion.lightBg);
+			chip.style.setProperty("--pb-chip-fg-light", notion.lightFg);
+			chip.style.setProperty("--pb-chip-bg-dark", notion.darkBg);
+			chip.style.setProperty("--pb-chip-fg-dark", notion.darkFg);
+		}
+	}
+
+	/** Options of a Select column: pinned colors first (settings order = the
+	 *  user's intended order), then every other value seen in the rows. */
+	private selectOptions(fmKey: string): string[] {
+		const out: string[] = [];
+		for (const v of Object.keys(this.plugin.settings.valueColors[fmKey] ?? {})) {
+			const t = v.trim();
+			if (t && t !== "null" && !out.includes(t)) out.push(t);
+		}
+		const seen = new Set<string>();
+		for (const en of this.data.data) {
+			const raw = frontmatterOf(this.app, en.file)?.[fmKey];
+			const t = raw == null ? "" : String(raw).trim();
+			if (t && t !== "null" && !out.includes(t)) seen.add(t);
+			if (seen.size >= 200) break;
+		}
+		return [...out, ...[...seen].sort((a, b) => a.localeCompare(b))];
+	}
+
+	/** Single-select popover for Select/Status columns: one click sets the
+	 *  value, typing filters, Enter takes the first match (or creates it). */
+	private beginSelectEdit(td: HTMLElement, en: BasesEntry, fmKey: string, raw: unknown) {
+		this.editing = true;
+		td.addClass("pb-editing");
+		const current = raw == null ? "" : String(raw).trim();
+
+		const pop = document.body.createDiv({ cls: "pb-listedit pb-seledit" });
+		const rect = td.getBoundingClientRect();
+		pop.style.left = Math.max(6, Math.min(rect.left, window.innerWidth - 260)) + "px";
+		pop.style.top = rect.bottom + 2 + "px";
+		pop.style.minWidth = Math.max(210, rect.width) + "px";
+
+		let done = false;
+		// undefined = cancel, null = clear the property, string = set it
+		const finish = (value?: string | null) => {
+			if (done) return;
+			done = true;
+			this.editing = false;
+			document.removeEventListener("mousedown", outside, true);
+			pop.remove();
+			td.removeClass("pb-editing");
+			if (value === undefined || value === current) {
+				this.onDataUpdated();
+				return;
+			}
+			void this.plugin.writeBatch(`Edited ${fmKey} of "${en.file.basename}"`, [
+				{ file: en.file, assignments: { [fmKey]: value ? value : undefined } },
+			]);
+		};
+		const outside = (e: MouseEvent) => {
+			if (!pop.contains(e.target as Node)) finish();
+		};
+
+		const input = pop.createEl("input", { cls: "pb-le-input", attr: { type: "text", placeholder: "Find or create…" } });
+		const optsEl = pop.createDiv({ cls: "pb-le-opts" });
+		const all = this.selectOptions(fmKey);
+
+		const renderOpts = (q: string) => {
+			optsEl.empty();
+			const typed = q.trim();
+			const query = typed.toLowerCase();
+			if (current && !typed) {
+				const row = optsEl.createDiv({ cls: "pb-le-opt pb-se-clear" });
+				setIcon(row.createSpan({ cls: "pb-le-oic" }), "x");
+				row.createSpan({ cls: "pb-le-olabel", text: "Clear" });
+				row.addEventListener("click", () => finish(null));
+			}
+			if (typed && !all.some((v) => v.toLowerCase() === query)) {
+				const row = optsEl.createDiv({ cls: "pb-le-opt" });
+				setIcon(row.createSpan({ cls: "pb-le-oic" }), "plus");
+				row.createSpan({ cls: "pb-le-olabel", text: `Create "${typed}"` });
+				row.addEventListener("click", () => finish(typed));
+			}
+			for (const v of all.filter((x) => x.toLowerCase().includes(query))) {
+				const row = optsEl.createDiv({ cls: "pb-le-opt" + (v === current ? " pb-se-cur" : "") });
+				const chip = row.createSpan({ cls: "pb-valchip pb-se-chip", text: v });
+				this.paintChip(chip, fmKey, v);
+				if (v === current) setIcon(row.createSpan({ cls: "pb-le-oic pb-se-check" }), "check");
+				row.addEventListener("click", () => finish(v));
+			}
+		};
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				const first = optsEl.querySelector<HTMLElement>(".pb-le-opt:not(.pb-se-clear)");
+				first?.click();
+			} else if (e.key === "Escape") finish();
+		});
+		input.addEventListener("input", () => renderOpts(input.value));
+
+		renderOpts("");
+		window.setTimeout(() => {
+			input.focus();
+			document.addEventListener("mousedown", outside, true);
+		}, 0);
+	}
+
 	private distinctListValues(fmKey: string): string[] {
 		const set = new Set<string>();
 		for (const en of this.data.data) {
@@ -7244,6 +7343,11 @@ class PowerTableView extends PBView {
 			this.beginListEdit(td, en, fmKey, raw);
 			return;
 		}
+		if (kind === "text" && !this.plugin.fieldType(fmKey) && ["value", "chip"].includes(String(this.config.get("color:note." + fmKey)))) {
+			// Select/Status column: a one-click picker over every known value
+			this.beginSelectEdit(td, en, fmKey, raw);
+			return;
+		}
 		this.editing = true;
 		td.empty();
 		td.addClass("pb-editing");
@@ -7252,26 +7356,6 @@ class PowerTableView extends PBView {
 		const input = td.createEl("input", { cls: "pb-cell-input", attr: { type } });
 		if (kind === "number") input.setAttr("step", "any");
 		input.value = raw == null ? "" : String(raw);
-		// suggest existing values only for Select/Status columns (color mode
-		// "value"), where repeating values is the point; plain Text stays a
-		// clean input, and a field type (Email, URL, Phone) is unique anyway
-		if (kind === "text" && !this.plugin.fieldType(fmKey) && ["value", "chip"].includes(String(this.config.get("color:note." + fmKey))) ) {
-			// offer the column's existing values, Notion-select style (read from
-			// frontmatter and skip "null" so an absent value never becomes an option)
-			const seen = new Set<string>();
-			for (const other of this.data.data) {
-				const rawV = frontmatterOf(this.app, other.file)?.[fmKey];
-				const s = rawV == null ? "" : String(rawV).trim();
-				if (s && s !== "null") seen.add(s);
-				if (seen.size >= 40) break;
-			}
-			if (seen.size) {
-				const id = "pb-dl-" + Math.abs(colorIndex(fmKey + Date.now(), 999983));
-				const dl = td.createEl("datalist", { attr: { id } });
-				for (const s of seen) dl.createEl("option", { attr: { value: s } });
-				input.setAttr("list", id);
-			}
-		}
 		let done = false;
 		const close = (commit: boolean, navigating = false) => {
 			if (done) return;

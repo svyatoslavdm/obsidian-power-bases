@@ -1144,7 +1144,7 @@ button.pb-cal-btn svg {
 	padding-top: 3px;
 	padding-bottom: 3px;
 }
-.pb-td .pb-valchip {
+:is(.pb-td, .pb-seledit) .pb-valchip {
 	margin: 0;
 	box-shadow: none;
 	border: none;
@@ -1158,15 +1158,15 @@ button.pb-cal-btn svg {
 	color: var(--pb-c);
 	background: color-mix(in srgb, var(--pb-c) 18%, transparent);
 }
-.theme-dark .pb-td .pb-valchip {
+.theme-dark :is(.pb-td, .pb-seledit) .pb-valchip {
 	background: color-mix(in srgb, var(--pb-c) 26%, transparent);
 }
 /* pinned to a Notion color: use Notion's exact background/text pair per theme */
-.pb-td .pb-valchip.pb-valchip-notion {
+:is(.pb-td, .pb-seledit) .pb-valchip.pb-valchip-notion {
 	color: var(--pb-chip-fg-light);
 	background: var(--pb-chip-bg-light);
 }
-.theme-dark .pb-td .pb-valchip.pb-valchip-notion {
+.theme-dark :is(.pb-td, .pb-seledit) .pb-valchip.pb-valchip-notion {
 	color: var(--pb-chip-fg-dark);
 	background: var(--pb-chip-bg-dark);
 }
@@ -3048,4 +3048,22 @@ body.theme-light .notice:not(.pw-self-styled) a {
 		min-width: 28px;
 		min-height: 28px;
 	}
+}
+
+/* single-select picker (Select/Status columns) */
+.pb-seledit .pb-le-opt {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.pb-seledit .pb-le-opt.pb-se-cur {
+	background: var(--background-modifier-hover);
+}
+.pb-seledit .pb-se-check {
+	margin-left: auto;
+	color: var(--text-muted);
+}
+.pb-seledit .pb-valchip {
+	display: inline-flex;
+	align-items: center;
 }
