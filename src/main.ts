@@ -192,6 +192,19 @@ function markDestructive(b: ButtonComponent): ButtonComponent {
 	return b;
 }
 
+/** Place a cell popover below its cell, or above it when the bottom of the
+ *  window is too close; always keep it inside the viewport. */
+function placePopover(pop: HTMLElement, rect: DOMRect) {
+	const margin = 8;
+	const h = pop.offsetHeight;
+	let top = rect.bottom + 2;
+	if (top + h > window.innerHeight - margin) {
+		const above = rect.top - h - 2;
+		top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - h);
+	}
+	pop.style.top = top + "px";
+}
+
 /** Attach a listener whose work is async.
  *
  *  addEventListener wants a void return and drops whatever it is handed, so an
@@ -7388,6 +7401,7 @@ class PowerTableView extends PBView {
 		input.addEventListener("input", () => renderOpts(input.value));
 
 		renderOpts("");
+		placePopover(pop, rect);
 		window.setTimeout(() => {
 			input.focus();
 			document.addEventListener("mousedown", outside, true);
@@ -7540,6 +7554,7 @@ class PowerTableView extends PBView {
 
 		renderChips();
 		renderOpts("");
+		placePopover(pop, rect);
 		window.setTimeout(() => {
 			input.focus();
 			document.addEventListener("mousedown", outside, true);
