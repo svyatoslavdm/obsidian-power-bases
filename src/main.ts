@@ -1065,6 +1065,7 @@ export default class PowerBasesPlugin extends Plugin {
 	/** Repaint every open Power Bases view (after a value-color change). */
 	repaintAll() {
 		for (const v of this.liveViews) {
+			if (!(v as unknown as { data?: unknown }).data) continue;
 			try {
 				v.onDataUpdated();
 			} catch {
@@ -1195,7 +1196,16 @@ export default class PowerBasesPlugin extends Plugin {
 
 	/** Repaint every open Power view (after a type or config change). */
 	refreshAll() {
-		for (const v of this.liveViews) v.onDataUpdated();
+		for (const v of this.liveViews) {
+			// a view that Bases has not fed yet (embed on a background tab, or
+			// mid-teardown) has no data to repaint; skip it instead of throwing
+			if (!(v as unknown as { data?: unknown }).data) continue;
+			try {
+				v.onDataUpdated();
+			} catch (e) {
+				console.warn("Power Bases: repaint skipped", e);
+			}
+		}
 	}
 
 	/** The editor kind chosen when a column was added (Power-Base's own record,
