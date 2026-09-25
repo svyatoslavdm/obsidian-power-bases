@@ -4109,6 +4109,74 @@ class SetPropertyModal extends Modal {
 }
 
 /** A one-field prompt (used to rename a list value). */
+/** Edit a Select value in one place: its name (renamed across the vault)
+ *  and its color (a Notion pair, or automatic). */
+class ValueEditModal extends Modal {
+	constructor(
+		app: App,
+		private plugin: PowerBasesPlugin,
+		private fmKey: string,
+		private value: string,
+		private onRename: (newName: string) => void,
+		private onDone: () => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		this.titleEl.setText(`Edit "${this.value}"`);
+		const c = this.contentEl;
+		c.createEl("p", { cls: "pb-modal-desc", text: "Name" });
+		const inp = c.createEl("input", { cls: "pb-prompt-input", attr: { type: "text" } });
+		inp.value = this.value;
+		c.createEl("p", { cls: "pb-modal-desc", text: "Color" });
+		const sw = c.createDiv({ cls: "pb-ve-swatches" });
+		let chosen: string | null | undefined = undefined; // undefined = keep, null = automatic
+		const current = this.plugin.settings.valueColors[this.fmKey]?.[this.value] ?? null;
+		const paint = () => {
+			sw.querySelectorAll<HTMLElement>(".pb-ve-swatch").forEach((el) => {
+				const hex = el.dataset.hex === "" ? null : el.dataset.hex;
+				const sel = chosen === undefined ? hex === current : hex === chosen;
+				el.toggleClass("pb-ve-selected", sel);
+			});
+		};
+		const add = (label: string, hex: string | null, bg: string, fg: string) => {
+			const el = sw.createSpan({ cls: "pb-valchip pb-ve-swatch", text: label });
+			el.dataset.hex = hex ?? "";
+			el.style.background = bg;
+			el.style.color = fg;
+			el.addEventListener("click", () => {
+				chosen = hex;
+				paint();
+			});
+		};
+		add("Auto", null, "transparent", "var(--text-muted)");
+		for (const nc of NOTION_CHIPS) add(nc.name.replace("Notion ", ""), nc.lightFg, nc.lightBg, nc.lightFg);
+		paint();
+		const save = async () => {
+			this.close();
+			if (chosen !== undefined) await this.plugin.setValueColor(this.fmKey, this.value, chosen);
+			const nv = inp.value.trim();
+			if (nv && nv !== this.value) this.onRename(nv);
+			else this.onDone();
+		};
+		inp.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				void save();
+			}
+		});
+		const btns = c.createDiv({ cls: "pb-modal-btns" });
+		btns.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.close());
+		btns.createEl("button", { text: "Save", cls: "mod-cta" }).addEventListener("click", () => void save());
+		window.setTimeout(() => inp.focus(), 0);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 class PromptModal extends Modal {
 	constructor(
 		app: App,
@@ -7276,12 +7344,14 @@ class PowerTableView extends PBView {
 				if (v === current) setIcon(row.createSpan({ cls: "pb-le-oic pb-se-check" }), "check");
 				row.addEventListener("click", () => finish(v));
 				const acts = row.createSpan({ cls: "pb-le-acts" });
-				const edit = acts.createSpan({ cls: "pb-le-act", attr: { "aria-label": "Rename everywhere" } });
+				const edit = acts.createSpan({ cls: "pb-le-act", attr: { "aria-label": "Rename / recolor" } });
 				setIcon(edit, "pencil");
 				edit.addEventListener("click", (e) => {
 					e.stopPropagation();
 					finish();
-					new PromptModal(this.app, { title: `Rename "${v}"`, initial: v, onSubmit: (nv) => void this.renameSelectValue(fmKey, v, nv) }).open();
+					new ValueEditModal(this.app, this.plugin, fmKey, v,
+						(nv) => void this.renameSelectValue(fmKey, v, nv),
+						() => this.plugin.refreshAll()).open();
 				});
 				const del = acts.createSpan({ cls: "pb-le-act pb-le-del", attr: { "aria-label": "Delete everywhere" } });
 				setIcon(del, "trash-2");

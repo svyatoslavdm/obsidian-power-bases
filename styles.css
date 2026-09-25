@@ -3087,3 +3087,24 @@ body.theme-light .notice:not(.pw-self-styled) a {
 	width: 14px;
 	height: 14px;
 }
+
+/* value editor (name + color) opened from the Select picker's pencil */
+.pb-ve-swatches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 4px 0 10px;
+}
+.pb-ve-swatch {
+	display: inline-flex;
+	align-items: center;
+	height: 24px;
+	padding: 0 8px;
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+	border: 2px solid transparent;
+}
+.pb-ve-swatch.pb-ve-selected {
+	border-color: var(--interactive-accent);
+}
