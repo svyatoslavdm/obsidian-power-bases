@@ -3109,3 +3109,39 @@ body.theme-light .notice:not(.pw-self-styled) a {
 .pb-ve-swatch.pb-ve-selected {
 	border-color: var(--interactive-accent);
 }
+
+/* title cell: edit in place on click; a peek button appears on hover */
+.pb-td.pb-namecell {
+	position: relative;
+	cursor: text;
+}
+.pb-td.pb-namecell .pb-name {
+	text-decoration: none;
+	color: var(--text-normal);
+	cursor: text;
+}
+.pb-td.pb-namecell .pb-peek {
+	position: absolute;
+	right: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: none;
+	align-items: center;
+	padding: 2px 4px;
+	border-radius: 4px;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px var(--background-modifier-border);
+	cursor: pointer;
+}
+.pb-td.pb-namecell:hover .pb-peek {
+	display: inline-flex;
+}
+.pb-td.pb-namecell .pb-peek:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+.pb-td.pb-namecell .pb-peek svg {
+	width: 15px;
+	height: 15px;
+}

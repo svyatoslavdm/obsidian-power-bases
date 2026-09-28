@@ -1787,6 +1787,18 @@ export default class PowerBasesPlugin extends Plugin {
 	 * A row should navigate to its note, not clone it. Ctrl/Cmd still asks for a
 	 * new tab on purpose, and that request is honored.
 	 */
+	/** Open a note in a dedicated pane to the right of the current one (Notion's
+	 *  side peek); the same pane is reused for the next peek. */
+	private peekLeaf: WorkspaceLeaf | null = null;
+	async peekNote(f: TFile): Promise<WorkspaceLeaf> {
+		const alive = this.peekLeaf && (this.peekLeaf as unknown as { parent?: unknown }).parent ? this.peekLeaf : null;
+		const leaf = alive ?? this.app.workspace.getLeaf("split", "vertical");
+		this.peekLeaf = leaf;
+		await leaf.openFile(f, { active: false });
+		await this.app.workspace.revealLeaf(leaf);
+		return leaf;
+	}
+
 	async showNote(f: TFile): Promise<WorkspaceLeaf> {
 		const open = this.openLeafFor(f.path);
 		if (open) {
@@ -4852,10 +4864,25 @@ class PowerTableView extends PBView {
 				const raw = fmKey ? rawOf(en, fmKey) : undefined;
 				const ft = fmKey ? this.plugin.fieldType(fmKey) : null;
 				if (p === "file.name") {
-					const link = td.createSpan({ cls: "pb-link", text: s });
-					link.addEventListener("click", (ev) => this.open(en.file, ev));
+					// Notion-style title cell: a click edits the name in place, the
+					// hover button (or Cmd-click / Enter) opens the note beside the table
+					td.addClass("pb-namecell");
+					const link = td.createSpan({ cls: "pb-link pb-name", text: s });
 					this.hoverable(link, en.file);
-					this.openable(link, en.file);
+					const peek = td.createSpan({ cls: "pb-peek", attr: { "aria-label": "Open beside (Cmd-click: new tab)" } });
+					setIcon(peek, "panel-right-open");
+					peek.addEventListener("click", (ev) => {
+						ev.stopPropagation();
+						if (ev.ctrlKey || ev.metaKey) void this.app.workspace.getLeaf(true).openFile(en.file);
+						else void this.plugin.peekNote(en.file);
+					});
+					td.addEventListener("click", (ev) => {
+						if (ev.ctrlKey || ev.metaKey) {
+							ev.stopPropagation();
+							void this.app.workspace.getLeaf(true).openFile(en.file);
+						}
+					});
+					this.registerEdit(td, () => this.beginNameEdit(td, en));
 				} else if (ft) {
 					this.renderTypedCell(td, en, fmKey!, ft, raw, s);
 				} else {
@@ -5076,7 +5103,8 @@ class PowerTableView extends PBView {
 			const tr = tbody.querySelector<HTMLTableRowElement>(`tr.pb-tr[data-path="${CSS.escape(pe.path)}"]`);
 			if (tr) {
 				const cells = Array.from(tr.cells) as EditCell[];
-				const target = (cells[pe.ci]?.pbEdit ? cells[pe.ci] : cells.find((c) => c.pbEdit)) ?? null;
+				const nameCell = cells.find((c) => c.classList.contains("pb-namecell") && c.pbEdit) ?? null;
+				const target = nameCell ?? (cells[pe.ci]?.pbEdit ? cells[pe.ci] : cells.find((c) => c.pbEdit)) ?? null;
 				if (target) {
 					target.scrollIntoView({ block: "nearest" });
 					target.pbEdit?.();
@@ -5924,9 +5952,51 @@ class PowerTableView extends PBView {
 		td.addClass("pb-editable");
 		(td as HTMLElement & { pbEdit?: () => void }).pbEdit = open;
 		td.addEventListener("click", (ev) => {
-			if ((ev.target as HTMLElement).closest("a, button")) return;
+			if ((ev.target as HTMLElement).closest("a, button, .pb-peek")) return;
+			if (ev.ctrlKey || ev.metaKey) return;
 			open();
 		});
+	}
+
+	/** Rename the note from its title cell: Enter/blur commits, Escape cancels. */
+	private beginNameEdit(td: HTMLElement, en: BasesEntry) {
+		if (this.editing) return;
+		this.editing = true;
+		td.addClass("pb-editing");
+		const before = en.file.basename;
+		td.empty();
+		const input = td.createEl("input", { cls: "pb-cell-input", attr: { type: "text" } });
+		input.value = before;
+		let done = false;
+		const close = (commit: boolean) => {
+			if (done) return;
+			done = true;
+			this.editing = false;
+			td.removeClass("pb-editing");
+			const next = input.value.trim().replace(/[\\/:*?"<>|#^\[\]]/g, "").trim();
+			if (commit && next && next !== before) {
+				td.setText(next);
+				const folder = en.file.parent?.path ?? "";
+				void this.app.fileManager.renameFile(en.file, this.plugin.uniquePath(folder === "/" ? "" : folder, next, ".md"));
+				return;
+			}
+			this.onDataUpdated();
+		};
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				close(true);
+			} else if (e.key === "Escape") {
+				e.preventDefault();
+				close(false);
+			}
+		});
+		input.addEventListener("blur", () => close(true));
+		window.setTimeout(() => {
+			input.focus();
+			if (before === "Untitled" || /^Untitled \d+$/.test(before)) input.select();
+			else input.setSelectionRange(input.value.length, input.value.length);
+		}, 0);
 	}
 
 	private makeEditable(td: HTMLElement, en: BasesEntry, fmKey: string, kind: CellKind, raw: unknown) {
