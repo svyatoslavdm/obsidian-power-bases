@@ -501,6 +501,9 @@ interface PowerBasesSettings {
 	 *  on pages they create. Off by default; needs myName to do anything. */
 	stampEdits: boolean;
 	showNotifications: boolean;
+	/** Frontmatter every row created with "+ New" starts with, by key; values
+	 *  may use {today}. Filter-implied properties win over these. */
+	rowDefaults: Record<string, string>;
 }
 
 const DEFAULT_SETTINGS: PowerBasesSettings = {
@@ -515,6 +518,7 @@ const DEFAULT_SETTINGS: PowerBasesSettings = {
 	myName: "",
 	stampEdits: false,
 	showNotifications: true,
+	rowDefaults: {},
 };
 
 /** Settings tab: manage the hand-picked value colors (the only persisted
@@ -4672,6 +4676,7 @@ class PowerTableView extends PBView {
 		// been provisioned or not, a flat unsorted table is draggable.
 		const rankKey = this.resolveRankKey(sortCfg);
 		if (rankKey) entries = orderByRank(entries, (en) => this.rawRankOf(en, rankKey));
+		entries = this.newRowsLast(entries);
 		const rowsDraggable = !sortCfg;
 		this.lastEntries = entries;
 		this.selected = new Set([...this.selected].filter((p) => entries.some((en) => en.file.path === p)));
@@ -5036,6 +5041,7 @@ class PowerTableView extends PBView {
 		const groups = this.data.groupedData.map((g) => {
 			let rows = allow ? g.entries.filter((en) => allow.has(en.file.path)) : g.entries;
 			if (sortCfg) rows = this.sortEntries(rows, sortCfg);
+			rows = this.newRowsLast(rows);
 			return { g, rows };
 		});
 		const flat = groups.length === 1 && groups[0].g.key === undefined;
@@ -6082,6 +6088,14 @@ class PowerTableView extends PBView {
 	 *  (Bases' own creator opens a pane, which yanks focus out of the table),
 	 *  and the repaint that brings the row in drops straight into its editor. */
 	private pendingRowEdit: { path: string; ci: number } | null = null;
+	/** Rows created in this view during this session: they stay at the bottom
+	 *  (of the table or of their group) whatever the sort says, like Notion,
+	 *  so a fresh row does not jump away while it is being filled in. */
+	private newRows = new Set<TFile>();
+	private newRowsLast<T extends { file: TFile }>(rows: T[]): T[] {
+		if (!this.newRows.size || !rows.some((r) => this.newRows.has(r.file))) return rows;
+		return [...rows.filter((r) => !this.newRows.has(r.file)), ...rows.filter((r) => this.newRows.has(r.file))];
+	}
 	private selected = new Set<string>();
 	private lastEntries: BasesEntry[] = [];
 	private lastCols: BasesPropertyId[] = [];
@@ -6108,12 +6122,17 @@ class PowerTableView extends PBView {
 				// unreadable base config: create a bare note
 			}
 		}
+		const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+		for (const [k, v] of Object.entries(this.plugin.settings.rowDefaults ?? {})) {
+			if (!(k in seed)) seed[k] = String(v).replace(/\{today\}/g, todayIso);
+		}
 		const yamlVal = (v: string) => (/^[\w.-]+$/.test(v) ? v : JSON.stringify(v));
 		const body = Object.keys(seed).length ? "---\n" + Object.entries(seed).map(([k, v]) => `${k}: ${yamlVal(v)}`).join("\n") + "\n---\n" : "";
 		const f = await this.app.vault.create(prefix + name + ".md", body);
 		if (this.plugin.settings.stampEdits && this.plugin.settings.myName.trim()) {
 			await this.app.fileManager.processFrontMatter(f, (fm: Record<string, unknown>) => this.plugin.stampCreate(fm));
 		}
+		this.newRows.add(f);
 		this.pendingRowEdit = { path: f.path, ci };
 	}
 
