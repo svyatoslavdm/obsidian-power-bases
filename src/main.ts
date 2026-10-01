@@ -5396,7 +5396,7 @@ class PowerTableView extends PBView {
 		if (NATIVE[type]) await this.plugin.setStoredKind(name, type as CellKind);
 		else if (type === "select" || type === "status") await this.plugin.setStoredKind(name, "text");
 		// Select and Status tint the column by value (like the board's lanes)
-		const viewOpts = type === "select" || type === "status" ? { ["color:" + propId]: "value" } : undefined;
+		const viewOpts = type === "select" || type === "status" ? { ["color:" + propId]: "chip" } : undefined;
 		try {
 			await addViewColumn(this.app, file, propId, this.viewName(), this.type, this.currentOrder(), viewOpts, at);
 		} catch (e) {
