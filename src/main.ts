@@ -5366,13 +5366,19 @@ class PowerTableView extends PBView {
 				for (const k of Object.keys((cfg.properties as Record<string, unknown>) ?? {})) if (k.startsWith("note.")) known.add(k.slice(5));
 				if (Array.isArray(cfg.views)) {
 					for (const v of cfg.views as Record<string, unknown>[]) {
-						for (const o of (v.order as string[]) ?? []) if (typeof o === "string" && o.startsWith("note.")) known.add(o.slice(5));
+						// a view's order lists "note.key" or just "key" (Bases accepts both)
+						for (const o of (v.order as string[]) ?? []) {
+							if (typeof o !== "string") continue;
+							if (o.startsWith("note.")) known.add(o.slice(5));
+							else if (!o.includes(".")) known.add(o);
+						}
 					}
 				}
 			} catch {
 				// unreadable base config: rows alone decide
 			}
 			const shown = new Set(this.currentOrder().map((p) => (p.startsWith("note.") ? p.slice(5) : p)));
+			known.delete("file.name");
 			const existing = [...known].filter((k) => !shown.has(k)).sort((a, b) => a.localeCompare(b));
 			new AddColumnModal(this.app, (name, type) => void this.addColumn(file, name, type, at), existing).open();
 		})();
