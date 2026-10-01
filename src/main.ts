@@ -6182,8 +6182,9 @@ class PowerTableView extends PBView {
 		}
 		const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 		for (const [k, v] of Object.entries(this.plugin.settings.rowDefaults ?? {})) {
-			if (!(k in seed)) seed[k] = String(v).replace(/\{today\}/g, todayIso);
+			if (!(k in seed)) seed[k] = String(v);
 		}
+		for (const k of Object.keys(seed)) seed[k] = seed[k].replace(/\{today\}/g, todayIso);
 		const yamlVal = (v: string) => (/^[\w.-]+$/.test(v) ? v : JSON.stringify(v));
 		const body = Object.keys(seed).length ? "---\n" + Object.entries(seed).map(([k, v]) => `${k}: ${yamlVal(v)}`).join("\n") + "\n---\n" : "";
 		const f = await this.app.vault.create(prefix + name + ".md", body);

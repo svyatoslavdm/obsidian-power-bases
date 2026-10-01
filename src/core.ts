@@ -553,8 +553,19 @@ export function formatLinkValue(address: string, caption: string): string {
  *  of the very view that created it. */
 export function impliedProps(filters: unknown, out: Record<string, string> = {}): Record<string, string> {
 	if (typeof filters === "string") {
-		if (filters.includes("||")) return out;
-		for (const m of filters.matchAll(/(?:^|&&)\s*!?\s*note\.([\w-]+)\s*==\s*"([^"]*)"/g)) out[m[1]] = m[2];
+		// an "a || b" filter: a row matching the first alternative passes, so
+		// seed that one (status == "ToDo" || status == "In Progress" -> ToDo)
+		const first = filters.split("||")[0];
+		for (const clause of first.split("&&")) {
+			const eq = clause.match(/^\s*!?\s*note\.([\w-]+)\s*==\s*"([^"]*)"\s*$/);
+			if (eq) {
+				if (!(eq[1] in out)) out[eq[1]] = eq[2];
+				continue;
+			}
+			// a date bound against today (scheduled <= today()) is met by today
+			const dt = clause.match(/^\s*note\.([\w-]+)\s*(<=|>=|==)\s*today\(\)\s*$/);
+			if (dt && !(dt[1] in out)) out[dt[1]] = "{today}";
+		}
 		return out;
 	}
 	if (Array.isArray(filters)) {
@@ -564,6 +575,7 @@ export function impliedProps(filters: unknown, out: Record<string, string> = {})
 	if (filters && typeof filters === "object") {
 		const o = filters as Record<string, unknown>;
 		if (o.and !== undefined) impliedProps(o.and, out);
+		else if (o.or !== undefined && Array.isArray(o.or) && o.or.length) impliedProps(o.or[0], out);
 		return out;
 	}
 	return out;
