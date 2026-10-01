@@ -504,6 +504,8 @@ interface PowerBasesSettings {
 	/** Frontmatter every row created with "+ New" starts with, by key; values
 	 *  may use {today}. Filter-implied properties win over these. */
 	rowDefaults: Record<string, string>;
+	/** First weekday of the cell date picker. */
+	pickerWeekStart: "monday" | "sunday";
 }
 
 const DEFAULT_SETTINGS: PowerBasesSettings = {
@@ -519,6 +521,7 @@ const DEFAULT_SETTINGS: PowerBasesSettings = {
 	stampEdits: false,
 	showNotifications: true,
 	rowDefaults: {},
+	pickerWeekStart: "monday",
 };
 
 /** Settings tab: manage the hand-picked value colors (the only persisted
@@ -6863,12 +6866,14 @@ class PowerTableView extends PBView {
 				render();
 			});
 
+			// the cell picker's week starts on Monday unless the settings say Sunday
+			const monday = (this.plugin.settings.pickerWeekStart ?? "monday") !== "sunday";
 			const dow = pop.createDiv({ cls: "pb-dp-dow" });
-			for (let i = 0; i < 7; i++) dow.createSpan({ text: new Date(2026, 0, 4 + i).toLocaleDateString(undefined, { weekday: "narrow" }) });
+			for (let i = 0; i < 7; i++) dow.createSpan({ text: new Date(2026, 0, (monday ? 5 : 4) + i).toLocaleDateString(undefined, { weekday: "narrow" }) });
 
 			const grid = pop.createDiv({ cls: "pb-dp-grid" });
 			const tKey = todayKey();
-			for (const cell of monthGrid(viewY, viewM, false)) {
+			for (const cell of monthGrid(viewY, viewM, monday)) {
 				const cls =
 					"pb-dp-day" +
 					(cell.inMonth ? "" : " pb-dp-out") +
