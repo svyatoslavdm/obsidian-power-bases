@@ -4062,6 +4062,7 @@ interface PBSubItem {
 /** Everything the "+ Column" dialog can create: a plain typed property, a
  *  Power-Base field type, a colored Select/Status, or a formula. */
 type AddColType =
+	| "existing"
 	| "text"
 	| "number"
 	| "date"
@@ -4321,7 +4322,8 @@ class AddColumnModal extends Modal {
 
 	constructor(
 		app: App,
-		private onAdd: (name: string, type: AddColType) => void
+		private onAdd: (name: string, type: AddColType) => void,
+		private existing: string[] = []
 	) {
 		super(app);
 	}
@@ -4331,7 +4333,24 @@ class AddColumnModal extends Modal {
 		this.modalEl.addClass("pb-addcol-modal");
 		const c = this.contentEl;
 		c.addClass("pb-addcol");
-		c.createEl("p", { cls: "pb-modal-desc", text: "Adds a property column to this view. Click a cell to fill in values." });
+		if (this.existing.length) {
+			// properties the base already knows (declared, used in another view, or
+			// present in some row) that this view does not show yet
+			c.createEl("p", { cls: "pb-modal-desc", text: "Show an existing property in this view:" });
+			const exRow = c.createDiv({ cls: "pb-rule-row" });
+			exRow.createSpan({ cls: "pb-rule-label", text: "Existing" });
+			const exSel = exRow.createEl("select", { cls: "dropdown" });
+			exSel.createEl("option", { attr: { value: "" }, text: "— pick a property —" });
+			for (const name of this.existing) exSel.createEl("option", { attr: { value: name }, text: name });
+			exSel.addEventListener("change", () => {
+				if (!exSel.value) return;
+				this.close();
+				this.onAdd(exSel.value, "existing");
+			});
+			c.createEl("p", { cls: "pb-modal-desc", text: "Or create a new property:" });
+		} else {
+			c.createEl("p", { cls: "pb-modal-desc", text: "Adds a property column to this view. Click a cell to fill in values." });
+		}
 
 		const nameRow = c.createDiv({ cls: "pb-rule-row" });
 		nameRow.createSpan({ cls: "pb-rule-label", text: "Name" });
@@ -5340,7 +5359,23 @@ class PowerTableView extends PBView {
 			new Notice("Power Bases: adding columns needs a saved .base file; an inline base block has none.");
 			return;
 		}
-		new AddColumnModal(this.app, (name, type) => void this.addColumn(file, name, type, at)).open();
+		void (async () => {
+			const known = new Set<string>(this.notePropKeys());
+			try {
+				const cfg = await readBaseConfig(this.app, file);
+				for (const k of Object.keys((cfg.properties as Record<string, unknown>) ?? {})) if (k.startsWith("note.")) known.add(k.slice(5));
+				if (Array.isArray(cfg.views)) {
+					for (const v of cfg.views as Record<string, unknown>[]) {
+						for (const o of (v.order as string[]) ?? []) if (typeof o === "string" && o.startsWith("note.")) known.add(o.slice(5));
+					}
+				}
+			} catch {
+				// unreadable base config: rows alone decide
+			}
+			const shown = new Set(this.currentOrder().map((p) => (p.startsWith("note.") ? p.slice(5) : p)));
+			const existing = [...known].filter((k) => !shown.has(k)).sort((a, b) => a.localeCompare(b));
+			new AddColumnModal(this.app, (name, type) => void this.addColumn(file, name, type, at), existing).open();
+		})();
 	}
 
 	/** Register the Obsidian type of a new property so empty cells edit right. */
@@ -5357,6 +5392,23 @@ class PowerTableView extends PBView {
 	 *  Obsidian type), a Power-Base field type, a colored Select/Status, or a
 	 *  formula, then open its format/config dialog where that helps. */
 	private async addColumn(file: TFile, rawName: string, type: AddColType, at?: number) {
+		if (type === "existing") {
+			const propId = "note." + rawName;
+			if (this.currentOrder().includes(propId)) {
+				new Notice("Power Bases: that column is already in this view.");
+				return;
+			}
+			// a key that carries value colors is a Select here too
+			const viewOpts = this.plugin.settings.valueColors[rawName] ? { ["color:" + propId]: "chip" } : undefined;
+			try {
+				await addViewColumn(this.app, file, propId, this.viewName(), this.type, this.currentOrder(), viewOpts, at);
+			} catch (e) {
+				new Notice("Power Bases: could not add the column. " + (e as Error).message);
+				return;
+			}
+			this.plugin.refreshAll();
+			return;
+		}
 		if (type === "formula") {
 			this.openFormulaModal();
 			return;
